@@ -7,236 +7,165 @@
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <div class="widget-root">
+  <div id="root" class="widget-root expanded">
 
     <!-- ========================================================== -->
-    <!-- 1. MINI STATUS PILL (Floats at top-right corner)          -->
+    <!-- 1. MINI PILL (click để mở rộng / thu nhỏ, kéo để di chuyển) -->
     <!-- ========================================================== -->
-    <div id="miniPill" data-tauri-drag-region class="mini-pill drag-handle" title="Kéo để di chuyển | Click để mở rộng/thu nhỏ">
-      
-      <!-- CPU Temp -->
-      <div class="pill-col interactive" style="flex-direction: row; align-items: center; gap: 6px;">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z" />
-        </svg>
+    <div id="miniPill" class="mini-pill" data-drag title="Kéo để di chuyển | Click để mở rộng/thu nhỏ">
+      <div class="pill-stats">
         <div class="pill-col">
+          <span class="pill-label">CPU</span>
+          <span id="pillCpuUsage" class="pill-value mono">--%</span>
+        </div>
+
+        <div class="pill-divider" data-temp></div>
+        <div class="pill-col" data-temp>
           <span class="pill-label">CPU TEMP</span>
-          <span id="pillCpuTemp" class="pill-value mono">48°C</span>
+          <span id="pillCpuTemp" class="pill-value mono">--°C</span>
         </div>
-      </div>
 
-      <div class="pill-divider"></div>
-
-      <!-- CPU Usage -->
-      <div class="pill-col">
-        <span class="pill-label">CPU</span>
-        <span id="pillCpuUsage" class="pill-value mono">24%</span>
-      </div>
-
-      <div class="pill-divider"></div>
-
-      <!-- RAM -->
-      <div class="pill-col">
-        <span class="pill-label">RAM</span>
-        <span id="pillRamUsage" class="pill-value mono">45%</span>
-      </div>
-
-      <div class="pill-divider"></div>
-
-      <!-- Net Speed -->
-      <div class="pill-col" style="flex-direction: row; align-items: center; gap: 6px;">
+        <div class="pill-divider"></div>
         <div class="pill-col">
-          <span class="pill-label">NET SPEED</span>
-          <span id="pillNetSpeed" class="pill-value mono">2.4 MB/s</span>
+          <span class="pill-label">RAM</span>
+          <span id="pillRamUsage" class="pill-value mono">--%</span>
         </div>
-        <svg class="signal-pulse" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#00e5ff" stroke-width="2">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.141 0M1.393 9.393c5.857-5.857 15.355-5.857 21.213 0" />
-        </svg>
+
+        <div class="pill-divider"></div>
+        <div class="pill-col">
+          <span class="pill-label">NET ↓ / ↑</span>
+          <span class="pill-value mono"><span id="pillNetDown">0 KB/s</span><span class="pill-net-up"> / <span id="pillNetUp">0 KB/s</span></span></span>
+        </div>
+
+        <button id="btnToggleMode" class="pill-toggle" data-no-drag title="Mở rộng / Thu nhỏ">
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
       </div>
 
-      <!-- Toggle Mode Icon -->
-      <div id="btnToggleMode" class="interactive" style="display: flex; align-items: center; justify-content: center; width: 18px; height: 18px; border-radius: 50%; background: rgba(255,255,255,0.08); margin-left: 2px;">
-        <svg id="pillArrowIcon" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2.5">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
-        </svg>
+      <div class="pill-date">
+        <span class="pill-date-item">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" />
+          </svg>
+          <span id="pillSolar">--</span>
+        </span>
+        <span class="pill-date-item lunar">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" />
+          </svg>
+          <span id="pillLunar">--</span>
+        </span>
       </div>
-
     </div>
 
     <!-- ========================================================== -->
-    <!-- 2. EXPANDED GLASS DASHBOARD CARD                           -->
+    <!-- 2. EXPANDED CARD                                           -->
     <!-- ========================================================== -->
     <div id="expandedCard" class="expanded-card">
-      
-      <!-- Drag header bar -->
-      <div class="drag-handle" style="display: flex; align-items: center; justify-content: space-between; padding-bottom: 2px;">
-        <div style="display: flex; align-items: center; gap: 6px;">
-          <span style="width: 7px; height: 7px; border-radius: 50%; background: #00e5ff; box-shadow: 0 0 8px #00e5ff;"></span>
-          <span style="font-size: 11px; font-weight: 700; color: #94a3b8; letter-spacing: 0.8px; text-transform: uppercase;">AeroPulse Widget</span>
+
+      <div class="card-header" data-drag>
+        <div class="card-brand">
+          <span class="brand-dot"></span>
+          <span>AeroPulse Widget</span>
         </div>
-        <div class="interactive" style="display: flex; align-items: center; gap: 6px;">
-          <!-- Collapse button -->
-          <div id="btnCollapse" style="cursor: pointer; padding: 2px 6px; border-radius: 6px; background: rgba(255,255,255,0.06); font-size: 10px; color: #94a3b8;" title="Thu nhỏ về Mini Pill">
-            ▲ Thu nhỏ
-          </div>
-        </div>
+        <button id="btnCollapse" class="btn-ghost" data-no-drag title="Thu nhỏ">▲ Thu nhỏ</button>
       </div>
 
-      <!-- SECTION 1: Dual Circular Gauges (CPU USAGE & CPU TEMP) -->
+      <!-- CPU & RAM gauges -->
       <div class="gauges-row">
-        
-        <!-- Gauge 1: CPU USAGE -->
-        <div class="gauge-box">
-          <div class="gauge-svg-wrapper">
-            <svg class="gauge-svg">
-              <circle cx="55" cy="55" r="43" class="gauge-track" />
-              <circle id="circleCpuUsage" cx="55" cy="55" r="43" class="gauge-progress" stroke-dasharray="270.17" stroke-dashoffset="205" />
-            </svg>
-            <div class="gauge-content">
-              <span class="gauge-title">CPU USAGE</span>
-              <span id="cardCpuUsage" class="gauge-number mono">24%</span>
-              <span id="cardCpuUsageSub" class="gauge-subtext mono">48°C</span>
-            </div>
+        <div class="gauge-svg-wrapper" id="cpuGaugeBox">
+          <svg class="gauge-svg" viewBox="0 0 110 110">
+            <circle cx="55" cy="55" r="43" class="gauge-track" />
+            <circle id="circleCpu" cx="55" cy="55" r="43" class="gauge-progress" />
+          </svg>
+          <div class="gauge-content">
+            <span class="gauge-title">CPU</span>
+            <span id="cardCpuUsage" class="gauge-number mono">--%</span>
+            <span id="cardCpuTemp" class="gauge-subtext mono">--°C</span>
           </div>
         </div>
 
-        <!-- Gauge 2: CPU TEMP -->
-        <div class="gauge-box">
-          <div class="gauge-svg-wrapper">
-            <svg class="gauge-svg">
-              <circle cx="55" cy="55" r="43" class="gauge-track" />
-              <circle id="circleCpuTemp" cx="55" cy="55" r="43" class="gauge-progress" stroke-dasharray="270.17" stroke-dashoffset="135" />
-            </svg>
-            <div class="gauge-content">
-              <span class="gauge-title">CPU TEMP</span>
-              <span id="cardCpuTemp" class="gauge-number mono">48°C</span>
-            </div>
+        <div class="gauge-svg-wrapper">
+          <svg class="gauge-svg" viewBox="0 0 110 110">
+            <circle cx="55" cy="55" r="43" class="gauge-track" />
+            <circle id="circleRam" cx="55" cy="55" r="43" class="gauge-progress" />
+          </svg>
+          <div class="gauge-content">
+            <span class="gauge-title">RAM</span>
+            <span id="cardRamUsage" class="gauge-number mono">--%</span>
+            <span id="cardRamSize" class="gauge-subtext mono">-- / -- GB</span>
+            <span id="cardRamTemp" class="gauge-subtext mono" hidden>--°C</span>
           </div>
         </div>
-
       </div>
 
-      <!-- SECTION 2: RAM USAGE -->
+      <!-- Disks -->
       <div class="sub-card">
-        <div class="bar-header">
-          <div class="bar-title">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#00e5ff" stroke-width="2">
-              <rect x="2" y="6" width="20" height="12" rx="2" />
-              <path d="M6 12h.01M10 12h.01M14 12h.01M18 12h.01" />
-            </svg>
-            <span>RAM USAGE</span>
-          </div>
-          <span id="ramText" class="bar-stats mono">45% | 14.4GB / 32GB</span>
+        <div class="section-title">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M4 6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6z" />
+            <circle cx="12" cy="12" r="3" />
+          </svg>
+          <span>Ổ đĩa</span>
         </div>
-        <div class="bar-track">
-          <div id="ramBar" class="bar-fill" style="width: 45%;"></div>
-        </div>
+        <div id="diskList" class="disk-list"></div>
       </div>
 
-      <!-- SECTION 3: SSD STORAGE -->
-      <div class="sub-card">
-        <div class="bar-header">
-          <div class="bar-title">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#00e5ff" stroke-width="2">
-              <path d="M4 6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6z" />
-              <circle cx="12" cy="12" r="3" />
-              <path d="M12 2v2M12 20v2" />
-            </svg>
-            <span>SSD STORAGE</span>
-          </div>
-          <span id="ssdText" class="bar-stats mono">680GB / 940GB</span>
-        </div>
-        <div style="display: flex; align-items: center; gap: 8px;">
-          <span style="font-size: 11px; font-weight: 700; color: #94a3b8; font-family: monospace;">C:</span>
-          <div class="bar-track" style="flex: 1;">
-            <div id="ssdBar" class="bar-fill" style="width: 72%;"></div>
-          </div>
-          <span id="ssdPercent" class="mono" style="font-size: 11px; font-weight: 700; color: #00e5ff;">72%</span>
-        </div>
-      </div>
-
-      <!-- SECTION 4: NETWORK REALTIME (DOWNLOAD & UPLOAD) -->
+      <!-- Network -->
       <div class="network-row">
-        
-        <!-- Download -->
         <div class="net-box">
           <div class="net-header">
-            <div class="net-label">
-              <span class="net-arrow">↓</span>
-              <span>DOWNLOAD</span>
-            </div>
-            <span id="cardDownVal" class="net-value mono">2.4 MB/s</span>
+            <span class="net-label"><span class="net-arrow">↓</span>DOWNLOAD</span>
+            <span id="cardDownVal" class="net-value mono">0 KB/s</span>
           </div>
-          <div style="height: 36px; width: 100%;">
-            <canvas id="downCanvas" class="net-canvas"></canvas>
-          </div>
+          <canvas id="downCanvas" class="net-canvas"></canvas>
         </div>
-
-        <!-- Upload -->
         <div class="net-box">
           <div class="net-header">
-            <div class="net-label">
-              <span class="net-arrow">↑</span>
-              <span>UPLOAD</span>
-            </div>
-            <span id="cardUpVal" class="net-value mono">0.9 MB/s</span>
+            <span class="net-label"><span class="net-arrow">↑</span>UPLOAD</span>
+            <span id="cardUpVal" class="net-value mono">0 KB/s</span>
           </div>
-          <div style="height: 36px; width: 100%;">
-            <canvas id="upCanvas" class="net-canvas"></canvas>
-          </div>
+          <canvas id="upCanvas" class="net-canvas"></canvas>
         </div>
-
       </div>
 
-      <!-- SECTION 5: LỊCH ÂM DƯƠNG (VIETNAMESE LUNAR CALENDAR) -->
+      <!-- Lịch âm dương -->
       <div class="calendar-card">
-        
-        <!-- Header -->
         <div class="cal-header">
-          <div class="cal-title">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#00e5ff" stroke-width="2">
-              <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-              <line x1="16" y1="2" x2="16" y2="6" />
-              <line x1="8" y1="2" x2="8" y2="6" />
-              <line x1="3" y1="10" x2="21" y2="10" />
+          <div class="section-title">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" />
             </svg>
-            <span>LỊCH ÂM DƯƠNG</span>
+            <span>Lịch âm dương</span>
           </div>
-          <span id="calHeaderDate" class="cal-header-date mono">OCT 22</span>
+          <span id="calWeekday" class="cal-weekday">--</span>
         </div>
 
-        <!-- Body -->
         <div class="cal-body">
-          
-          <!-- Solar Left Box -->
-          <div class="cal-solar-box">
-            <span id="solarWeekday" class="solar-weekday">TUESDAY</span>
-            <span id="solarDayBig" class="solar-day-big mono">22</span>
-            <span id="solarFullStr" class="solar-subtext mono">Solar: 22 Thg 10, 2024</span>
+          <div class="cal-col">
+            <span class="cal-kind">Dương lịch</span>
+            <span id="solarDay" class="cal-day">--</span>
+            <span id="solarMonthYear" class="cal-sub">--</span>
           </div>
-
-          <!-- Lunar Right Box -->
-          <div class="cal-lunar-box">
-            <div id="lunarYearHour" class="lunar-year-hour">
-              Giáp Thìn | Giờ: Bính Thân
-            </div>
-            <div id="lunarMonthTitle" class="lunar-month-title">
-              THÁNG 09 | 20
-            </div>
-            <div id="lunarShort" class="lunar-short-badge mono">
-              20/09 AL
-            </div>
-            <div id="lunarDayDetail" class="lunar-day-detail">
-              Ngày Đinh Dậu, Tiết Hàn Lộ
-            </div>
+          <div class="cal-divider"></div>
+          <div class="cal-col lunar">
+            <span class="cal-kind">Âm lịch</span>
+            <span id="lunarDay" class="cal-day">--</span>
+            <span id="lunarMonthYear" class="cal-sub">--</span>
           </div>
-
         </div>
 
+        <div class="cal-footer">
+          <div class="cal-chip"><span>Ngày</span><b id="canChiDay">--</b></div>
+          <div class="cal-chip"><span>Tháng</span><b id="canChiMonth">--</b></div>
+          <div class="cal-chip"><span>Giờ</span><b id="canChiHour">--</b></div>
+          <div class="cal-chip"><span>Tiết khí</span><b id="tietKhi">--</b></div>
+        </div>
       </div>
 
     </div>
-
   </div>
 
   <script type="module" src="main.js"></script>

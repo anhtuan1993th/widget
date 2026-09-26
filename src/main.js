@@ -1,282 +1,277 @@
 import { getFullDateInfo } from './lunar.js';
 
-// Check if running inside Tauri runtime
-const isTauri = typeof window !== 'undefined' && window.__TAURI__ && window.__TAURI__.core;
-const invoke = isTauri ? window.__TAURI__.core.invoke : async (cmd, args) => null;
+// Running inside Tauri, or opened directly in a browser for UI work (simulated data)
+const tauri = window.__TAURI__;
+const isTauri = !!tauri?.core;
+const invoke = isTauri ? tauri.core.invoke : async () => null;
+const appWindow = isTauri ? tauri.window.getCurrentWindow() : null;
 
-let currentMode = 'expanded'; // 'pill' or 'expanded'
+const $ = (id) => document.getElementById(id);
+const GB = 1024 ** 3;
+const RING = 270.18; // 2πr for r = 43
+const HISTORY_LEN = 30;
+const POLL_MS = 1000;
 
-// Net speed sparkline history (24 data points)
-const downHistory = Array(24).fill(2.4);
-const upHistory = Array(24).fill(0.9);
+const downHistory = Array(HISTORY_LEN).fill(0);
+const upHistory = Array(HISTORY_LEN).fill(0);
 
-function initSparkline(canvasId) {
-  const canvas = document.getElementById(canvasId);
-  if (!canvas) return null;
-  const ctx = canvas.getContext('2d');
-  return { canvas, ctx };
+// ---------------------------------------------------------------- helpers
+
+function formatSpeed(bps) {
+  if (bps < 1024 * 1024) return `${(bps / 1024).toFixed(bps < 10 * 1024 ? 1 : 0)} KB/s`;
+  return `${(bps / (1024 * 1024)).toFixed(1)} MB/s`;
 }
 
-let downPlot = null;
-let upPlot = null;
+function formatGB(bytes) {
+  const gb = bytes / GB;
+  return gb >= 100 ? gb.toFixed(0) : gb.toFixed(1);
+}
 
-function drawWave(plot, history, maxClamp = 5) {
-  if (!plot) return;
-  const { canvas, ctx } = plot;
-  const w = canvas.width = canvas.offsetWidth;
-  const h = canvas.height = canvas.offsetHeight;
+function levelClass(percent) {
+  if (percent >= 90) return 'level-crit';
+  if (percent >= 75) return 'level-warn';
+  return '';
+}
+
+function setLevel(el, percent) {
+  el.classList.remove('level-warn', 'level-crit');
+  const cls = levelClass(percent);
+  if (cls) el.classList.add(cls);
+}
+
+function setRing(el, percent) {
+  const p = Math.min(Math.max(percent, 0), 100);
+  el.style.strokeDashoffset = RING - (p / 100) * RING;
+  setLevel(el, p);
+}
+
+const pad2 = (n) => String(n).padStart(2, '0');
+
+// ---------------------------------------------------------------- sparkline
+
+function drawWave(canvas, history) {
+  const w = canvas.clientWidth;
+  const h = canvas.clientHeight;
   if (!w || !h) return;
-
+  const dpr = window.devicePixelRatio || 1;
+  if (canvas.width !== w * dpr || canvas.height !== h * dpr) {
+    canvas.width = w * dpr;
+    canvas.height = h * dpr;
+  }
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, w, h);
 
-  const grad = ctx.createLinearGradient(0, 0, 0, h);
-  grad.addColorStop(0, 'rgba(0, 229, 255, 0.4)');
-  grad.addColorStop(1, 'rgba(0, 229, 255, 0.0)');
-
+  // Autoscale with a 64 KB/s floor so idle noise doesn't fill the chart
+  const maxVal = Math.max(...history, 64 * 1024);
   const step = w / (history.length - 1);
-  const maxVal = Math.max(...history, maxClamp);
+  const yOf = (v) => h - 2 - (v / maxVal) * (h - 6);
 
   ctx.beginPath();
-  history.forEach((val, i) => {
-    const x = i * step;
-    const y = h - (val / maxVal) * (h - 6) - 3;
-    if (i === 0) ctx.moveTo(x, y);
-    else ctx.lineTo(x, y);
-  });
+  history.forEach((v, i) => (i ? ctx.lineTo(i * step, yOf(v)) : ctx.moveTo(0, yOf(v))));
+  ctx.strokeStyle = '#00e5ff';
+  ctx.lineWidth = 1.6;
+  ctx.lineJoin = 'round';
+  ctx.stroke();
 
-  // Area fill
   ctx.lineTo(w, h);
   ctx.lineTo(0, h);
   ctx.closePath();
+  const grad = ctx.createLinearGradient(0, 0, 0, h);
+  grad.addColorStop(0, 'rgba(0, 229, 255, 0.35)');
+  grad.addColorStop(1, 'rgba(0, 229, 255, 0)');
   ctx.fillStyle = grad;
   ctx.fill();
-
-  // Wave line
-  ctx.beginPath();
-  history.forEach((val, i) => {
-    const x = i * step;
-    const y = h - (val / maxVal) * (h - 6) - 3;
-    if (i === 0) ctx.moveTo(x, y);
-    else ctx.lineTo(x, y);
-  });
-  ctx.strokeStyle = '#00e5ff';
-  ctx.lineWidth = 1.8;
-  ctx.stroke();
 }
 
 function redrawWaves() {
-  drawWave(downPlot, downHistory, 8);
-  drawWave(upPlot, upHistory, 4);
+  if (!root.classList.contains('expanded')) return;
+  drawWave($('downCanvas'), downHistory);
+  drawWave($('upCanvas'), upHistory);
 }
 
-// Convert bytes to human readable format (GB / MB)
-function formatBytes(bytes, decimals = 1) {
-  if (bytes === 0) return '0 GB';
-  const k = 1024;
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(decimals)) + ' ' + sizes[i];
-}
+// ---------------------------------------------------------------- calendar
 
-function formatSpeed(bytesPerSec) {
-  if (bytesPerSec < 1024 * 1024) {
-    return (bytesPerSec / 1024).toFixed(1) + ' KB/s';
-  }
-  return (bytesPerSec / (1024 * 1024)).toFixed(1) + ' MB/s';
-}
-
-// Update Calendar information
 function updateCalendar() {
-  const info = getFullDateInfo();
-  const { solar, lunar } = info;
+  const { solar, lunar } = getFullDateInfo();
+  const lunarMonth = `${lunar.lunarMonth}${lunar.lunarLeap ? ' nhuận' : ''}`;
 
-  // Header month tag (e.g. SEP 25 or OCT 22)
-  const monthNames = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
-  const headerDateStr = `${monthNames[solar.month - 1]} ${solar.day}`;
-  document.getElementById('calHeaderDate').innerText = headerDateStr;
+  // Mini pill
+  $('pillSolar').textContent = `${solar.weekdayShort}, ${pad2(solar.day)}/${pad2(solar.month)}/${solar.year}`;
+  $('pillLunar').textContent =
+    `${pad2(lunar.lunarDay)}/${pad2(lunar.lunarMonth)}${lunar.lunarLeap ? 'N' : ''} ÂL · ${lunar.canChiYear}`;
 
-  // Solar box
-  document.getElementById('solarWeekday').innerText = solar.weekday;
-  document.getElementById('solarDayBig').innerText = solar.day;
-  document.getElementById('solarFullStr').innerText = `Solar: ${solar.day} Thg ${solar.month}, ${solar.year}`;
-
-  // Lunar box
-  document.getElementById('lunarYearHour').innerText = `${lunar.canChiYear} | Giờ: ${lunar.canChiHour}`;
-  
-  const lunarMonthPad = lunar.lunarMonth.toString().padStart(2, '0');
-  const lunarDayPad = lunar.lunarDay.toString().padStart(2, '0');
-  document.getElementById('lunarMonthTitle').innerText = `THÁNG ${lunarMonthPad} | ${lunarDayPad}`;
-  document.getElementById('lunarShort').innerText = `${lunarDayPad}/${lunarMonthPad} AL${lunar.lunarLeap ? ' (Nhuận)' : ''}`;
-  document.getElementById('lunarDayDetail').innerText = `Ngày ${lunar.canChiDay}, Tiết ${lunar.tietKhi}`;
+  // Expanded card
+  $('calWeekday').textContent = solar.weekday;
+  $('solarDay').textContent = pad2(solar.day);
+  $('solarMonthYear').textContent = `Tháng ${solar.month}, ${solar.year}`;
+  $('lunarDay').textContent = pad2(lunar.lunarDay);
+  $('lunarMonthYear').textContent = `Tháng ${lunarMonth}, ${lunar.canChiYear}`;
+  $('canChiDay').textContent = lunar.canChiDay;
+  $('canChiMonth').textContent = lunar.canChiMonth;
+  $('canChiHour').textContent = lunar.canChiHour;
+  $('tietKhi').textContent = lunar.tietKhi;
 }
 
-// Update System Monitor UI
-function updateUI(stats) {
-  const cpuPercent = Math.round(stats.cpu_usage);
-  const cpuTemp = Math.round(stats.cpu_temp);
-  const ramPercent = Math.round(stats.ram_percent);
+// ---------------------------------------------------------------- stats
 
-  const ramUsedGB = (stats.ram_used_bytes / (1024 * 1024 * 1024)).toFixed(1);
-  const ramTotalGB = (stats.ram_total_bytes / (1024 * 1024 * 1024)).toFixed(0);
-
-  const downSpeedStr = formatSpeed(stats.net_rx_bytes_per_sec);
-  const upSpeedStr = formatSpeed(stats.net_tx_bytes_per_sec);
-
-  // 1. Mini Top Pill
-  document.getElementById('pillCpuTemp').innerText = `${cpuTemp}°C`;
-  document.getElementById('pillCpuUsage').innerText = `${cpuPercent}%`;
-  document.getElementById('pillRamUsage').innerText = `${ramPercent}%`;
-  document.getElementById('pillNetSpeed').innerText = downSpeedStr;
-
-  // 2. Expanded Gauges
-  document.getElementById('cardCpuUsage').innerText = `${cpuPercent}%`;
-  document.getElementById('cardCpuUsageSub').innerText = `${cpuTemp}°C`;
-  document.getElementById('cardCpuTemp').innerText = `${cpuTemp}°C`;
-
-  // Ring Circumference = 270.17
-  const cpuOffset = 270.17 - (cpuPercent / 100) * 270.17;
-  document.getElementById('circleCpuUsage').style.strokeDashoffset = Math.max(0, cpuOffset);
-
-  // Temp offset (range 30°C to 95°C)
-  const tempRatio = Math.min(Math.max((cpuTemp - 30) / 65, 0), 1);
-  const tempOffset = 270.17 - tempRatio * 270.17;
-  document.getElementById('circleCpuTemp').style.strokeDashoffset = Math.max(0, tempOffset);
-
-  // 3. RAM bar
-  document.getElementById('ramText').innerText = `${ramPercent}% | ${ramUsedGB}GB / ${ramTotalGB}GB`;
-  document.getElementById('ramBar').style.width = `${ramPercent}%`;
-
-  // 4. SSD bar (First disk or C:)
-  if (stats.disks && stats.disks.length > 0) {
-    const primaryDisk = stats.disks.find(d => d.mount_point.toUpperCase().includes('C:')) || stats.disks[0];
-    const diskUsedGB = Math.round(primaryDisk.used_bytes / (1024 * 1024 * 1024));
-    const diskTotalGB = Math.round(primaryDisk.total_bytes / (1024 * 1024 * 1024));
-    const diskPercent = Math.round(primaryDisk.usage_percent);
-
-    document.getElementById('ssdText').innerText = `${diskUsedGB}GB / ${diskTotalGB}GB`;
-    document.getElementById('ssdBar').style.width = `${diskPercent}%`;
-    document.getElementById('ssdPercent').innerText = `${diskPercent}%`;
+function renderDisks(disks) {
+  const list = $('diskList');
+  // Rebuild only when the set of drives changes; otherwise update in place
+  const key = disks.map((d) => d.mount_point).join('|');
+  if (list.dataset.key !== key) {
+    list.dataset.key = key;
+    list.innerHTML = disks
+      .map(
+        (d, i) => `
+        <div class="disk-row" data-i="${i}">
+          <span class="disk-name mono">${d.mount_point.replace(/[&<>"]/g, '')}</span>
+          <div class="bar-track"><div class="bar-fill"></div></div>
+          <span class="disk-pct mono"></span>
+          <span class="disk-size mono"></span>
+        </div>`,
+      )
+      .join('');
   }
+  disks.forEach((d, i) => {
+    const row = list.children[i];
+    const pct = Math.round(d.usage_percent);
+    setLevel(row, pct);
+    row.querySelector('.bar-fill').style.width = `${pct}%`;
+    row.querySelector('.disk-pct').textContent = `${pct}%`;
+    row.querySelector('.disk-size').textContent = `${formatGB(d.used_bytes)}/${formatGB(d.total_bytes)} GB`;
+  });
+}
 
-  // 5. Network speeds and sparklines
-  document.getElementById('cardDownVal').innerText = downSpeedStr;
-  document.getElementById('cardUpVal').innerText = upSpeedStr;
+function updateUI(stats) {
+  const cpu = Math.round(stats.cpu_usage);
+  const ram = Math.round(stats.ram_percent);
+  const hasCpuTemp = stats.cpu_temp != null;
+  const down = formatSpeed(stats.net_rx_bytes_per_sec);
+  const up = formatSpeed(stats.net_tx_bytes_per_sec);
 
-  const downMB = stats.net_rx_bytes_per_sec / (1024 * 1024);
-  const upMB = stats.net_tx_bytes_per_sec / (1024 * 1024);
+  // Mini pill; the temperature column only shows when a sensor is readable
+  $('pillCpuUsage').textContent = `${cpu}%`;
+  document.querySelectorAll('[data-temp]').forEach((el) => (el.hidden = !hasCpuTemp));
+  if (hasCpuTemp) $('pillCpuTemp').textContent = `${Math.round(stats.cpu_temp)}°C`;
+  $('pillRamUsage').textContent = `${ram}%`;
+  $('pillNetDown').textContent = down;
+  $('pillNetUp').textContent = up;
 
+  // CPU gauge
+  $('cardCpuUsage').textContent = `${cpu}%`;
+  setRing($('circleCpu'), cpu);
+  const cpuTemp = $('cardCpuTemp');
+  cpuTemp.textContent = hasCpuTemp ? `${Math.round(stats.cpu_temp)}°C` : '--°C';
+  cpuTemp.classList.toggle('muted', !hasCpuTemp);
+  cpuTemp.title = hasCpuTemp ? '' : 'Máy không cung cấp cảm biến nhiệt độ';
+  $('cpuGaugeBox').title = stats.cpu_brand || '';
+
+  // RAM gauge
+  $('cardRamUsage').textContent = `${ram}%`;
+  $('cardRamSize').textContent = `${formatGB(stats.ram_used_bytes)} / ${Math.round(stats.ram_total_bytes / GB)} GB`;
+  setRing($('circleRam'), ram);
+  const ramTemp = $('cardRamTemp');
+  ramTemp.hidden = stats.ram_temp == null;
+  if (stats.ram_temp != null) ramTemp.textContent = `${Math.round(stats.ram_temp)}°C`;
+
+  renderDisks(stats.disks || []);
+
+  // Network
+  $('cardDownVal').textContent = down;
+  $('cardUpVal').textContent = up;
   downHistory.shift();
-  downHistory.push(downMB);
+  downHistory.push(stats.net_rx_bytes_per_sec);
   upHistory.shift();
-  upHistory.push(upMB);
-
+  upHistory.push(stats.net_tx_bytes_per_sec);
   redrawWaves();
 }
 
-// Fetch stats loop
-async function fetchStats() {
-  if (isTauri) {
+function simulatedStats() {
+  return {
+    cpu_usage: 10 + Math.random() * 15,
+    cpu_temp: 52 + Math.random() * 4,
+    cpu_brand: 'Simulated CPU',
+    ram_used_bytes: 10.3 * GB,
+    ram_total_bytes: 16 * GB,
+    ram_percent: 64.4,
+    ram_temp: null,
+    disks: [
+      { mount_point: 'C:', total_bytes: 351 * GB, used_bytes: 197 * GB, usage_percent: 56.1 },
+      { mount_point: 'D:', total_bytes: 580 * GB, used_bytes: 490 * GB, usage_percent: 84.5 },
+    ],
+    net_rx_bytes_per_sec: Math.random() * 400 * 1024,
+    net_tx_bytes_per_sec: Math.random() * 60 * 1024,
+  };
+}
+
+// Chained timeout instead of setInterval so slow reads never pile up
+async function pollStats() {
+  if (!document.hidden) {
     try {
-      const stats = await invoke('get_system_stats');
+      const stats = isTauri ? await invoke('get_system_stats') : simulatedStats();
       if (stats) updateUI(stats);
     } catch (err) {
-      console.error("Lỗi khi đọc get_system_stats:", err);
-    }
-  } else {
-    // Simulated data if running in browser / dev without backend
-    const simCpu = Math.floor(20 + Math.random() * 8);
-    const simTemp = Math.floor(46 + Math.random() * 4);
-    const simRam = 45;
-    const simDown = 2.4 * 1024 * 1024 + (Math.random() - 0.5) * 500000;
-    const simUp = 0.9 * 1024 * 1024 + (Math.random() - 0.5) * 200000;
-
-    updateUI({
-      cpu_usage: simCpu,
-      cpu_temp: simTemp,
-      cpu_brand: "AMD Ryzen 7 / Intel Core i7",
-      ram_used_bytes: 14.4 * 1024 * 1024 * 1024,
-      ram_total_bytes: 32 * 1024 * 1024 * 1024,
-      ram_percent: simRam,
-      disks: [
-        {
-          name: "Local Disk",
-          mount_point: "C:\\",
-          total_bytes: 940 * 1024 * 1024 * 1024,
-          available_bytes: 260 * 1024 * 1024 * 1024,
-          used_bytes: 680 * 1024 * 1024 * 1024,
-          usage_percent: 72
-        }
-      ],
-      net_rx_bytes_per_sec: simDown,
-      net_tx_bytes_per_sec: simUp
-    });
-  }
-}
-
-// Switch between Mini Pill mode and Expanded Card mode
-async function switchMode(targetMode) {
-  currentMode = targetMode;
-  const card = document.getElementById('expandedCard');
-  const arrowIcon = document.getElementById('pillArrowIcon');
-
-  if (currentMode === 'pill') {
-    card.style.display = 'none';
-    if (arrowIcon) arrowIcon.style.transform = 'rotate(0deg)';
-  } else {
-    card.style.display = 'flex';
-    if (arrowIcon) arrowIcon.style.transform = 'rotate(180deg)';
-    setTimeout(redrawWaves, 50);
-  }
-
-  if (isTauri) {
-    try {
-      await invoke('set_widget_mode', { mode: currentMode });
-    } catch (e) {
-      console.warn("Lỗi set_widget_mode:", e);
+      console.error('get_system_stats failed:', err);
     }
   }
+  setTimeout(pollStats, POLL_MS);
 }
+
+// ---------------------------------------------------------------- window
+
+const root = $('root');
+
+function setMode(expanded) {
+  root.classList.toggle('expanded', expanded);
+  if (expanded) requestAnimationFrame(redrawWaves);
+}
+
+// Keep the native window exactly as tall as the content
+function fitWindow() {
+  const height = Math.ceil(root.getBoundingClientRect().height);
+  if (isTauri && height > 0) invoke('resize_widget', { height }).catch(console.warn);
+}
+
+// Dragging starts only after the mouse moves a few pixels, so a plain click on the
+// pill still toggles the widget instead of being swallowed by the OS drag loop.
+let dragOrigin = null;
+let dragged = false;
+
+document.addEventListener('mousedown', (e) => {
+  dragged = false;
+  if (e.button !== 0 || !e.target.closest('[data-drag]') || e.target.closest('[data-no-drag]')) return;
+  dragOrigin = { x: e.screenX, y: e.screenY };
+});
+
+document.addEventListener('mousemove', (e) => {
+  if (!dragOrigin) return;
+  if (!(e.buttons & 1)) {
+    dragOrigin = null;
+    return;
+  }
+  if (Math.abs(e.screenX - dragOrigin.x) + Math.abs(e.screenY - dragOrigin.y) > 4) {
+    dragOrigin = null;
+    dragged = true;
+    appWindow?.startDragging().catch(console.warn);
+  }
+});
+
+document.addEventListener('mouseup', () => (dragOrigin = null));
+
+// ---------------------------------------------------------------- init
 
 window.addEventListener('DOMContentLoaded', () => {
-  downPlot = initSparkline('downCanvas');
-  upPlot = initSparkline('upCanvas');
+  new ResizeObserver(fitWindow).observe(root);
+
+  $('miniPill').addEventListener('click', () => {
+    if (dragged) return;
+    setMode(!root.classList.contains('expanded'));
+  });
+  $('btnCollapse').addEventListener('click', () => setMode(false));
+  window.addEventListener('resize', redrawWaves);
 
   updateCalendar();
-  setInterval(updateCalendar, 10000);
-
-  // Initial fetch and 1-second interval
-  fetchStats();
-  setInterval(fetchStats, 1000);
-
-  // Setup click listeners for toggling
-  const miniPill = document.getElementById('miniPill');
-  const btnToggleMode = document.getElementById('btnToggleMode');
-  const btnCollapse = document.getElementById('btnCollapse');
-
-  const handleToggle = (e) => {
-    // Only toggle if not clicking drag area if drag was moved
-    if (currentMode === 'pill') {
-      switchMode('expanded');
-    } else {
-      switchMode('pill');
-    }
-  };
-
-  btnToggleMode.addEventListener('click', (e) => {
-    e.stopPropagation();
-    handleToggle(e);
-  });
-
-  miniPill.addEventListener('click', (e) => {
-    if (e.target.closest('.interactive')) return;
-    handleToggle(e);
-  });
-
-  btnCollapse.addEventListener('click', (e) => {
-    e.stopPropagation();
-    switchMode('pill');
-  });
-
-  // Window resize event for canvas
-  window.addEventListener('resize', redrawWaves);
+  setInterval(updateCalendar, 30_000);
+  pollStats();
 });

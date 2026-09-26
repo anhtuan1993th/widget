@@ -1,14 +1,19 @@
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap');
-
+/* System fonts only: the app must work offline and not hit Google on every launch. */
 :root {
-  --bg-glass: rgba(13, 27, 42, 0.78);
-  --bg-pill: rgba(11, 23, 38, 0.88);
+  --font-ui: 'Segoe UI Variable Text', 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
+  --font-mono: 'Cascadia Mono', 'JetBrains Mono', Consolas, monospace;
+
+  --bg-glass: rgba(13, 27, 42, 0.82);
+  --bg-pill: rgba(11, 23, 38, 0.9);
   --bg-subcard: rgba(8, 17, 28, 0.65);
   --border-cyan: rgba(56, 189, 248, 0.28);
   --border-pill: rgba(56, 189, 248, 0.35);
+  --line: rgba(255, 255, 255, 0.08);
   --cyan-accent: #00e5ff;
-  --cyan-sub: #38bdf8;
+  --amber: #fbbf24;
+  --red: #f87171;
   --text-main: #f8fafc;
+  --text-soft: #cbd5e1;
   --text-muted: #94a3b8;
 }
 
@@ -16,7 +21,6 @@
   margin: 0;
   padding: 0;
   box-sizing: border-box;
-  font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   user-select: none;
 }
 
@@ -25,50 +29,42 @@ html, body {
   height: 100%;
   background: transparent;
   overflow: hidden;
+  font-family: var(--font-ui);
+  color: var(--text-main);
 }
 
-.mono {
-  font-family: 'JetBrains Mono', Consolas, monospace;
+button {
+  font: inherit;
+  color: inherit;
+  border: none;
+  background: none;
+  cursor: pointer;
 }
 
-/* App container */
+[hidden] { display: none !important; }
+
+.mono { font-family: var(--font-mono); }
+
+/* Root sizes to its content; main.js resizes the window to match. */
 .widget-root {
   display: flex;
   flex-direction: column;
-  align-items: flex-end;
   gap: 8px;
   padding: 4px;
   width: 100%;
-  height: 100%;
 }
 
-/* Drag region */
-.drag-handle {
-  cursor: grab;
-  -webkit-app-region: drag;
-}
+[data-drag] { cursor: grab; }
 
-.interactive {
-  -webkit-app-region: no-drag;
-}
-
-/* Mini Top Pill (Capsule bar) */
+/* ---------------- Mini pill ---------------- */
 .mini-pill {
   width: 100%;
-  height: 44px;
-  padding: 0 14px;
-  border-radius: 9999px;
+  padding: 7px 12px 6px 16px;
+  border-radius: 22px;
   background: var(--bg-pill);
-  backdrop-filter: blur(24px) saturate(180%);
-  -webkit-backdrop-filter: blur(24px) saturate(180%);
   border: 1px solid var(--border-pill);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45), 0 0 12px rgba(6, 182, 212, 0.18);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  color: var(--text-main);
-  cursor: pointer;
-  transition: all 0.2s ease;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
   white-space: nowrap;
 }
 
@@ -77,10 +73,18 @@ html, body {
   box-shadow: 0 8px 28px rgba(0, 0, 0, 0.55), 0 0 18px rgba(0, 229, 255, 0.3);
 }
 
+.pill-stats {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
 .pill-col {
   display: flex;
   flex-direction: column;
-  line-height: 1.1;
+  line-height: 1.15;
+  pointer-events: none;
 }
 
 .pill-label {
@@ -93,68 +97,138 @@ html, body {
 .pill-value {
   font-size: 12px;
   font-weight: 700;
-  color: #ffffff;
+  color: #fff;
 }
+
+.pill-net-up { color: var(--text-muted); font-weight: 500; }
 
 .pill-divider {
   width: 1px;
-  height: 16px;
+  height: 18px;
   background: rgba(255, 255, 255, 0.12);
 }
 
-/* Expanded Card */
-.expanded-card {
-  width: 100%;
-  border-radius: 24px;
-  background: var(--bg-glass);
-  backdrop-filter: blur(28px) saturate(190%);
-  -webkit-backdrop-filter: blur(28px) saturate(190%);
-  border: 1px solid var(--border-cyan);
-  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6), 
-              0 0 24px rgba(6, 182, 212, 0.14),
-              inset 0 1px 1px rgba(255, 255, 255, 0.18);
-  padding: 18px;
+.pill-toggle {
   display: flex;
-  flex-direction: column;
-  gap: 12px;
-  transition: opacity 0.25s ease, transform 0.25s ease;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-muted);
+  transition: background 0.15s ease, transform 0.25s ease;
+}
+.pill-toggle:hover { background: rgba(0, 229, 255, 0.2); color: #fff; }
+.widget-root.expanded .pill-toggle { transform: rotate(180deg); }
+
+.pill-date {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 5px;
+  padding-top: 5px;
+  border-top: 1px solid var(--line);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-soft);
+  pointer-events: none;
 }
 
-/* Card Sub-Containers */
+.pill-date-item { display: flex; align-items: center; gap: 5px; }
+.pill-date-item svg { color: var(--text-muted); }
+.pill-date-item.lunar { color: var(--cyan-accent); }
+.pill-date-item.lunar svg { color: var(--cyan-accent); }
+
+/* The calendar card already shows the dates when expanded. */
+.widget-root.expanded .pill-date { display: none; }
+
+/* ---------------- Expanded card ---------------- */
+.expanded-card {
+  display: none;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  padding: 16px;
+  border-radius: 24px;
+  background: var(--bg-glass);
+  border: 1px solid var(--border-cyan);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6),
+              0 0 24px rgba(6, 182, 212, 0.14),
+              inset 0 1px 1px rgba(255, 255, 255, 0.18);
+}
+.widget-root.expanded .expanded-card { display: flex; }
+
+.card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.card-brand {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  pointer-events: none;
+}
+
+.brand-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--cyan-accent);
+  box-shadow: 0 0 8px var(--cyan-accent);
+}
+
+.btn-ghost {
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.06);
+  font-size: 10px;
+  color: var(--text-muted);
+}
+.btn-ghost:hover { background: rgba(0, 229, 255, 0.18); color: #fff; }
+
 .sub-card {
   background: var(--bg-subcard);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--line);
   border-radius: 14px;
   padding: 10px 14px;
 }
 
-/* Circular Gauges */
+.section-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  color: #e2e8f0;
+  text-transform: uppercase;
+}
+.section-title svg { color: var(--cyan-accent); }
+
+/* ---------------- Gauges ---------------- */
 .gauges-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 12px;
-  padding: 4px 0;
-}
-
-.gauge-box {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
+  justify-items: center;
 }
 
 .gauge-svg-wrapper {
   position: relative;
-  width: 110px;
-  height: 110px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  width: 116px;
+  height: 116px;
 }
 
 .gauge-svg {
-  width: 110px;
-  height: 110px;
+  width: 100%;
+  height: 100%;
   transform: rotate(-90deg);
 }
 
@@ -166,15 +240,18 @@ html, body {
 
 .gauge-progress {
   fill: none;
-  stroke: var(--cyan-accent);
+  stroke: var(--level-color, var(--cyan-accent));
   stroke-width: 7;
   stroke-linecap: round;
-  filter: drop-shadow(0 0 8px #00e5ff);
-  transition: stroke-dashoffset 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+  stroke-dasharray: 270.18;
+  stroke-dashoffset: 270.18;
+  filter: drop-shadow(0 0 6px var(--level-color, var(--cyan-accent)));
+  transition: stroke-dashoffset 0.6s cubic-bezier(0.4, 0, 0.2, 1), stroke 0.3s ease;
 }
 
 .gauge-content {
   position: absolute;
+  inset: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -183,54 +260,52 @@ html, body {
 }
 
 .gauge-title {
-  font-size: 9.5px;
+  font-size: 10px;
   font-weight: 700;
-  letter-spacing: 0.8px;
+  letter-spacing: 1px;
   color: var(--text-muted);
-  text-transform: uppercase;
 }
 
 .gauge-number {
   font-size: 24px;
   font-weight: 800;
-  color: #ffffff;
-  margin-top: 1px;
+  line-height: 1.15;
+  color: #fff;
 }
 
 .gauge-subtext {
-  font-size: 11px;
+  font-size: 10.5px;
   font-weight: 600;
   color: var(--cyan-accent);
 }
+.gauge-subtext.muted { color: var(--text-muted); font-weight: 500; }
 
-/* Linear progress bars */
-.bar-header {
+/* Load levels, applied to gauges and bars */
+.level-warn { --level-color: var(--amber); }
+.level-crit { --level-color: var(--red); }
+
+/* ---------------- Disks ---------------- */
+.disk-list {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  font-size: 11px;
-  margin-bottom: 6px;
+  flex-direction: column;
+  gap: 7px;
+  margin-top: 9px;
 }
 
-.bar-title {
-  display: flex;
+.disk-row {
+  display: grid;
+  grid-template-columns: 22px 1fr 34px 92px;
   align-items: center;
-  gap: 6px;
-  font-weight: 700;
-  letter-spacing: 0.5px;
-  color: #e2e8f0;
-  text-transform: uppercase;
-  font-size: 10.5px;
+  gap: 8px;
+  font-size: 11px;
 }
 
-.bar-stats {
-  font-size: 11px;
-  color: #cbd5e1;
-}
+.disk-name { font-weight: 700; color: var(--text-muted); }
+.disk-pct { font-weight: 700; color: var(--level-color, var(--cyan-accent)); text-align: right; }
+.disk-size { color: var(--text-soft); text-align: right; }
 
 .bar-track {
-  width: 100%;
-  height: 9px;
+  height: 8px;
   background: rgba(15, 23, 42, 0.9);
   border-radius: 9999px;
   overflow: hidden;
@@ -240,12 +315,12 @@ html, body {
 .bar-fill {
   height: 100%;
   border-radius: 9999px;
-  background: linear-gradient(90deg, #0096c7, #00b4d8, #00e5ff);
-  box-shadow: 0 0 10px rgba(0, 229, 255, 0.45);
+  background: linear-gradient(90deg, #0096c7, var(--level-color, var(--cyan-accent)));
+  box-shadow: 0 0 8px rgba(0, 229, 255, 0.35);
   transition: width 0.5s ease;
 }
 
-/* Network Row */
+/* ---------------- Network ---------------- */
 .network-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -254,12 +329,9 @@ html, body {
 
 .net-box {
   background: var(--bg-subcard);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--line);
   border-radius: 12px;
-  padding: 8px 10px;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
+  padding: 8px 10px 6px;
 }
 
 .net-header {
@@ -276,26 +348,24 @@ html, body {
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.5px;
-  color: #cbd5e1;
+  color: var(--text-soft);
 }
 
-.net-arrow {
-  color: var(--cyan-accent);
-  font-weight: 800;
-}
+.net-arrow { color: var(--cyan-accent); font-weight: 800; }
 
 .net-value {
   font-size: 11px;
   font-weight: 700;
-  color: #ffffff;
+  color: #fff;
 }
 
 .net-canvas {
+  display: block;
   width: 100%;
   height: 34px;
 }
 
-/* Lịch Âm Dương Section */
+/* ---------------- Calendar ---------------- */
 .calendar-card {
   background: linear-gradient(180deg, rgba(10, 20, 34, 0.85) 0%, rgba(6, 14, 24, 0.95) 100%);
   border: 1px solid rgba(56, 189, 248, 0.22);
@@ -307,103 +377,72 @@ html, body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding-bottom: 8px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  margin-bottom: 10px;
 }
 
-.cal-title {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 0.8px;
-  color: #e2e8f0;
-}
-
-.cal-header-date {
+.cal-weekday {
   font-size: 11px;
   font-weight: 700;
-  color: #94a3b8;
-  letter-spacing: 1px;
+  color: var(--cyan-accent);
+  padding: 2px 9px;
+  border-radius: 9999px;
+  background: rgba(0, 229, 255, 0.1);
 }
 
 .cal-body {
   display: grid;
-  grid-template-columns: 2fr 3fr;
-  gap: 12px;
-  align-items: center;
+  grid-template-columns: 1fr 1px 1fr;
+  align-items: stretch;
+  margin: 10px 0;
 }
 
-.cal-solar-box {
+.cal-col {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  border-right: 1px solid rgba(255, 255, 255, 0.08);
-  padding-right: 8px;
+  text-align: center;
 }
 
-.solar-weekday {
-  font-size: 10px;
+.cal-kind {
+  font-size: 9.5px;
   font-weight: 700;
-  letter-spacing: 0.8px;
-  color: #cbd5e1;
-}
-
-.solar-day-big {
-  font-size: 38px;
-  font-weight: 900;
-  color: #ffffff;
-  line-height: 1;
-  margin: 2px 0;
-}
-
-.solar-subtext {
-  font-size: 9px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
   color: var(--text-muted);
 }
 
-.cal-lunar-box {
+.cal-day {
+  font-size: 40px;
+  font-weight: 800;
+  line-height: 1.1;
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+}
+.cal-col.lunar .cal-day { color: var(--cyan-accent); text-shadow: 0 0 14px rgba(0, 229, 255, 0.35); }
+
+.cal-sub {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text-soft);
+}
+
+.cal-divider { background: var(--line); }
+
+.cal-footer {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+}
+
+.cal-chip {
   display: flex;
   flex-direction: column;
-  justify-content: center;
-  padding-left: 4px;
-  text-align: left;
+  align-items: center;
+  gap: 1px;
+  padding: 5px 2px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--line);
+  white-space: nowrap;
 }
-
-.lunar-year-hour {
-  font-size: 10px;
-  color: #94a3b8;
-  font-weight: 500;
-}
-
-.lunar-month-title {
-  font-size: 15px;
-  font-weight: 800;
-  color: #ffffff;
-  margin: 1px 0;
-}
-
-.lunar-short-badge {
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--cyan-accent);
-}
-
-.lunar-day-detail {
-  font-size: 9.5px;
-  color: #94a3b8;
-  margin-top: 2px;
-}
-
-/* Animations */
-@keyframes pulseGlow {
-  0%, 100% { opacity: 0.8; }
-  50% { opacity: 1; }
-}
-
-.signal-pulse {
-  animation: pulseGlow 1.5s infinite;
-}
+.cal-chip span { font-size: 9px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+.cal-chip b { font-size: 11px; font-weight: 700; color: #e2e8f0; }
